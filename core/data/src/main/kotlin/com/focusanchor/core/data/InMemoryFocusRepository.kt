@@ -1,19 +1,18 @@
 package com.focusanchor.core.data
 
-import com.focusanchor.core.model.FocusMode
 import com.focusanchor.core.model.FocusSession
 import com.focusanchor.core.model.FocusSessionSummary
 import com.focusanchor.core.model.SuspendAnchor
 import com.focusanchor.core.model.SuspendItemType
 
 class InMemoryFocusRepository : FocusRepository {
-    override fun currentSession(): FocusSession? =
-        FocusSession(
-            title = "背单词",
-            durationMinutes = 25,
-            mode = FocusMode.Study,
-            interruptionCount = 1,
-        )
+    private var currentSession: FocusSession? = null
+
+    override fun currentSession(): FocusSession? = currentSession
+
+    override fun startSession(session: FocusSession) {
+        currentSession = session
+    }
 
     override fun recentSummaries(): List<FocusSessionSummary> =
         listOf(
@@ -33,4 +32,3 @@ class InMemoryFocusRepository : FocusRepository {
             SuspendAnchor(type = SuspendItemType.Research, keyword = "六级报名"),
         )
 }
-

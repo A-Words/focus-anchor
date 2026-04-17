@@ -6,7 +6,7 @@ import com.focusanchor.core.model.SuspendAnchor
 
 interface FocusRepository {
     fun currentSession(): FocusSession?
+    fun startSession(session: FocusSession)
     fun recentSummaries(): List<FocusSessionSummary>
     fun suspendedAnchors(): List<SuspendAnchor>
 }
-
