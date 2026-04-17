@@ -21,6 +21,7 @@ class InMemoryFocusRepositoryTest {
             title = "写作业",
             durationMinutes = 40,
             mode = FocusMode.Study,
+            startedAtEpochMillis = 1_000L,
         )
 
         repository.startSession(session)

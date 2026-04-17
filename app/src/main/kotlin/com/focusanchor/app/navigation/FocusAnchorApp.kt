@@ -72,6 +72,9 @@ fun FocusAnchorApp() {
                     focusRepository.startSession(session)
                     currentSession = focusRepository.currentSession()
                 },
+                onOpenSummary = {
+                    destination = TopLevelDestination.Summary
+                },
                 modifier = Modifier.padding(innerPadding),
             )
             TopLevelDestination.Inbox -> InboxScreen(modifier = Modifier.padding(innerPadding))

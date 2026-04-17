@@ -4,6 +4,6 @@ data class FocusSession(
     val title: String,
     val durationMinutes: Int,
     val mode: FocusMode,
+    val startedAtEpochMillis: Long,
     val interruptionCount: Int = 0,
 )
-
