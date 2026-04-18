@@ -1,7 +1,13 @@
 <resources>
-    <style name="Theme.FocusAnchor" parent="android:Theme.DeviceDefault.NoActionBar" />
+    <style name="Theme.FocusAnchor" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 
-    <style name="Theme.FocusAnchor.QuickSuspend" parent="android:Theme.DeviceDefault.Dialog.NoActionBar">
+    <style name="Theme.FocusAnchor.QuickSuspend" parent="@style/Theme.FocusAnchor">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:backgroundDimEnabled">true</item>
         <item name="android:windowIsTranslucent">true</item>
