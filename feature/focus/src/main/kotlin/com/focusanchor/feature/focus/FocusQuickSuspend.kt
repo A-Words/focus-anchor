@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -77,18 +76,6 @@ fun FocusQuickSuspendScreen(
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "快速挂起",
-                    style = MaterialTheme.typography.headlineSmall,
-                )
-                Text(
-                    text = "想到别的事时，先用类型和极短关键词接住它，再回到当前任务。",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-        }
         item {
             FocusAnchorSectionCard(
                 title = "挂起内容",
