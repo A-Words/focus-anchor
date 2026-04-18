@@ -1,6 +1,7 @@
 package com.focusanchor.feature.focus
 
-import com.focusanchor.core.model.FocusSessionStatus
+import com.focusanchor.core.model.FocusSession
+import com.focusanchor.core.model.clockState
 
 internal data class FocusCountdownState(
     val remainingSeconds: Long,
@@ -8,27 +9,11 @@ internal data class FocusCountdownState(
 )
 
 internal fun calculateFocusCountdownState(
-    startedAtEpochMillis: Long,
-    durationMinutes: Int,
-    accumulatedPausedMillis: Long,
-    pausedAtEpochMillis: Long?,
-    status: FocusSessionStatus,
+    session: FocusSession,
     nowMillis: Long,
-): FocusCountdownState {
-    val totalDurationSeconds = durationMinutes * 60L
-    val activeElapsedMillis = when (status) {
-        FocusSessionStatus.Running -> nowMillis - startedAtEpochMillis - accumulatedPausedMillis
-        FocusSessionStatus.Paused -> (
-            (pausedAtEpochMillis ?: nowMillis) -
-                startedAtEpochMillis -
-                accumulatedPausedMillis
-            )
-    }.coerceAtLeast(0L)
-    val elapsedSeconds = activeElapsedMillis / 1000L
-    val remainingSeconds = (totalDurationSeconds - elapsedSeconds).coerceAtLeast(0L)
-
-    return FocusCountdownState(
-        remainingSeconds = remainingSeconds,
-        isCompleted = remainingSeconds == 0L,
+): FocusCountdownState = session.clockState(nowMillis).let { state ->
+    FocusCountdownState(
+        remainingSeconds = state.remainingSeconds,
+        isCompleted = state.isCompleted,
     )
 }

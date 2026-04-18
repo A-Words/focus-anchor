@@ -3,129 +3,95 @@ package com.focusanchor.core.data
 import com.focusanchor.core.model.FocusMode
 import com.focusanchor.core.model.FocusSession
 import com.focusanchor.core.model.FocusSessionStatus
+import com.focusanchor.core.model.SuspendItemType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class InMemoryFocusRepositoryTest {
-    @Test
-    fun currentSession_isNullByDefault() {
-        val repository = InMemoryFocusRepository()
-
-        assertNull(repository.currentSession())
-    }
+    private val repository = InMemoryFocusRepository()
 
     @Test
-    fun startSession_storesCurrentSessionInMemory() {
-        val repository = InMemoryFocusRepository()
-        val session = FocusSession(
-            title = "写作业",
-            durationMinutes = 40,
-            mode = FocusMode.Study,
-            startedAtEpochMillis = 1_000L,
-        )
+    fun startSession_updatesObservableCurrentSessionImmediately() {
+        val session = sampleSession()
 
         repository.startSession(session)
 
-        assertEquals(session, repository.currentSession())
+        assertEquals(session, repository.currentSessionFlow.value)
     }
 
     @Test
-    fun pauseCurrentSession_marksSessionPausedAndIncrementsInterruptions() {
-        val repository = InMemoryFocusRepository()
-        repository.startSession(
-            FocusSession(
-                title = "背单词",
-                durationMinutes = 25,
-                mode = FocusMode.Study,
-                startedAtEpochMillis = 1_000L,
-            ),
-        )
+    fun pauseAndResumeSession_updatesPauseStateAndAccumulatedMillis() {
+        repository.startSession(sampleSession())
 
-        repository.pauseCurrentSession(pausedAtEpochMillis = 6_000L)
-
-        val pausedSession = assertNotNull(repository.currentSession())
+        repository.pauseCurrentSession(pausedAtEpochMillis = 70_000L)
+        val pausedSession = repository.currentSessionFlow.value
+        assertNotNull(pausedSession)
         assertEquals(FocusSessionStatus.Paused, pausedSession.status)
-        assertEquals(6_000L, pausedSession.pausedAtEpochMillis)
-        assertEquals(1, pausedSession.interruptionCount)
-    }
+        assertEquals(70_000L, pausedSession.pausedAtEpochMillis)
 
-    @Test
-    fun resumeCurrentSession_accumulatesPausedTimeAndReturnsToRunning() {
-        val repository = InMemoryFocusRepository()
-        repository.startSession(
-            FocusSession(
-                title = "刷题",
-                durationMinutes = 40,
-                mode = FocusMode.Study,
-                startedAtEpochMillis = 1_000L,
-                status = FocusSessionStatus.Paused,
-                pausedAtEpochMillis = 6_000L,
-                accumulatedPausedMillis = 2_000L,
-                interruptionCount = 1,
-            ),
-        )
-
-        repository.resumeCurrentSession(resumedAtEpochMillis = 10_000L)
-
-        val resumedSession = assertNotNull(repository.currentSession())
+        repository.resumeCurrentSession(resumedAtEpochMillis = 90_000L)
+        val resumedSession = repository.currentSessionFlow.value
+        assertNotNull(resumedSession)
         assertEquals(FocusSessionStatus.Running, resumedSession.status)
         assertEquals(null, resumedSession.pausedAtEpochMillis)
-        assertEquals(6_000L, resumedSession.accumulatedPausedMillis)
-        assertEquals(1, resumedSession.interruptionCount)
+        assertEquals(20_000L, resumedSession.accumulatedPausedMillis)
     }
 
     @Test
-    fun finishCurrentSession_returnsSummaryClearsSessionAndPrependsHistory() {
-        val repository = InMemoryFocusRepository()
-        repository.startSession(
-            FocusSession(
-                title = "写作业",
-                durationMinutes = 40,
-                mode = FocusMode.Study,
-                startedAtEpochMillis = 0L,
-            ),
+    fun addSuspendAnchor_supportsTypeOnlyAndKeywordVariants() {
+        repository.startSession(sampleSession())
+
+        val typeOnly = repository.addSuspendAnchor(
+            type = SuspendItemType.Idea,
+            keyword = null,
+            createdAtEpochMillis = 20_000L,
+        )
+        val withKeyword = repository.addSuspendAnchor(
+            type = SuspendItemType.Todo,
+            keyword = "实验报告",
+            createdAtEpochMillis = 21_000L,
+        )
+
+        assertNotNull(typeOnly)
+        assertNotNull(withKeyword)
+        assertEquals(null, typeOnly.keyword)
+        assertEquals("实验报告", withKeyword.keyword)
+        assertEquals(10_000L, typeOnly.sessionStartedAtEpochMillis)
+        assertEquals(10_000L, withKeyword.sessionStartedAtEpochMillis)
+        assertEquals(2, repository.suspendedAnchorsFlow.value.count { it.sessionStartedAtEpochMillis == 10_000L })
+    }
+
+    @Test
+    fun finishCurrentSession_usesRealSuspendCountInSummary() {
+        repository.startSession(sampleSession())
+        repository.addSuspendAnchor(
+            type = SuspendItemType.Message,
+            keyword = "导师",
+            createdAtEpochMillis = 20_000L,
+        )
+        repository.addSuspendAnchor(
+            type = SuspendItemType.Research,
+            keyword = null,
+            createdAtEpochMillis = 21_000L,
         )
 
         val summary = repository.finishCurrentSession(
-            finishedAtEpochMillis = 2_400_000L,
+            finishedAtEpochMillis = 1_510_000L,
             endedEarly = false,
         )
 
-        val latestSummary = assertNotNull(summary)
-        assertNull(repository.currentSession())
-        assertEquals(latestSummary, repository.recentSummaries().first())
-        assertEquals("写作业", latestSummary.title)
-        assertEquals(40, latestSummary.actualMinutes)
-        assertEquals(false, latestSummary.endedEarly)
+        assertNotNull(summary)
+        assertEquals(2, summary.suspendCount)
+        assertNull(repository.currentSessionFlow.value)
+        assertEquals(summary, repository.recentSummariesFlow.value.first())
     }
 
-    @Test
-    fun finishCurrentSession_marksEndedEarlyAndExcludesActivePauseWindow() {
-        val repository = InMemoryFocusRepository()
-        repository.startSession(
-            FocusSession(
-                title = "看课",
-                durationMinutes = 25,
-                mode = FocusMode.Study,
-                startedAtEpochMillis = 0L,
-                status = FocusSessionStatus.Paused,
-                pausedAtEpochMillis = 600_000L,
-                accumulatedPausedMillis = 120_000L,
-                interruptionCount = 2,
-            ),
-        )
-
-        val summary = repository.finishCurrentSession(
-            finishedAtEpochMillis = 900_000L,
-            endedEarly = true,
-        )
-
-        val latestSummary = assertNotNull(summary)
-        assertTrue(latestSummary.endedEarly)
-        assertEquals(8, latestSummary.actualMinutes)
-        assertEquals("本次专注已提前结束", latestSummary.tone)
-    }
+    private fun sampleSession() = FocusSession(
+        title = "背单词",
+        durationMinutes = 25,
+        mode = FocusMode.Study,
+        startedAtEpochMillis = 10_000L,
+    )
 }

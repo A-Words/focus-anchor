@@ -12,15 +12,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.focusanchor.core.designsystem.component.FocusAnchorSectionCard
-
-private val historyPlaceholders = listOf(
-    "今天专注 3 次，总时长 95 分钟",
-    "最常见任务：背单词",
-    "高分心时段：20:00 - 21:00",
-)
+import com.focusanchor.core.model.FocusSessionSummary
 
 @Composable
-fun HistoryScreen(modifier: Modifier = Modifier) {
+fun HistoryScreen(
+    summaries: List<FocusSessionSummary>,
+    modifier: Modifier = Modifier,
+) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
@@ -38,12 +36,20 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
                 )
             }
         }
-        items(historyPlaceholders) { item ->
-            FocusAnchorSectionCard(
-                title = item,
-                body = "当前用于占位目录与职责，后续这里会切成列表项模型和统计模块。",
-            )
+        if (summaries.isEmpty()) {
+            item {
+                FocusAnchorSectionCard(
+                    title = "还没有历史记录",
+                    body = "完成一轮专注后，这里会保留你的会话结果。",
+                )
+            }
+        } else {
+            items(summaries, key = { "${it.title}-${it.actualMinutes}-${it.suspendCount}" }) { summary ->
+                FocusAnchorSectionCard(
+                    title = "${summary.title}｜${summary.actualMinutes} 分钟",
+                    body = "中断 ${summary.interruptionCount} 次，挂起 ${summary.suspendCount} 条，${summary.tone}",
+                )
+            }
         }
     }
 }
-

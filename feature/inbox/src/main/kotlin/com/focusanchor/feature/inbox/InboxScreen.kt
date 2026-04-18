@@ -13,16 +13,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.focusanchor.core.designsystem.component.FocusAnchorSectionCard
 import com.focusanchor.core.model.SuspendAnchor
-import com.focusanchor.core.model.SuspendItemType
-
-private val sampleAnchors = listOf(
-    SuspendAnchor(type = SuspendItemType.Message, keyword = "导师"),
-    SuspendAnchor(type = SuspendItemType.Research, keyword = "六级报名"),
-    SuspendAnchor(type = SuspendItemType.Idea, keyword = "课题名"),
-)
 
 @Composable
-fun InboxScreen(modifier: Modifier = Modifier) {
+fun InboxScreen(
+    anchors: List<SuspendAnchor>,
+    modifier: Modifier = Modifier,
+) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
@@ -40,12 +36,26 @@ fun InboxScreen(modifier: Modifier = Modifier) {
                 )
             }
         }
-        items(sampleAnchors) { anchor ->
-            FocusAnchorSectionCard(
-                title = "${anchor.type.label}｜${anchor.keyword}",
-                body = "这里保留最小记录单位，后续可扩展为时间戳、来源会话、处理状态。",
-            )
+        if (anchors.isEmpty()) {
+            item {
+                FocusAnchorSectionCard(
+                    title = "还没有挂起事项",
+                    body = "开始专注后，可以从页面或通知里把突发念头先挂进这里。",
+                )
+            }
+        } else {
+            items(anchors, key = { it.id }) { anchor ->
+                FocusAnchorSectionCard(
+                    title = buildString {
+                        append(anchor.type.label)
+                        anchor.keyword?.takeIf { it.isNotBlank() }?.let {
+                            append("｜")
+                            append(it)
+                        }
+                    },
+                    body = "已收入稍后箱。后续这里可扩展转待办、忽略和处理状态。",
+                )
+            }
         }
     }
 }
-

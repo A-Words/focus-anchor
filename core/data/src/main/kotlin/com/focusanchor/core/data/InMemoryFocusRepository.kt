@@ -5,32 +5,58 @@ import com.focusanchor.core.model.FocusSessionSummary
 import com.focusanchor.core.model.FocusSessionStatus
 import com.focusanchor.core.model.SuspendAnchor
 import com.focusanchor.core.model.SuspendItemType
+import java.util.UUID
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class InMemoryFocusRepository : FocusRepository {
-    private var currentSession: FocusSession? = null
-    private val recentSummaries = mutableListOf(
-        FocusSessionSummary(
-            title = "高数刷题",
-            plannedMinutes = 40,
-            actualMinutes = 38,
-            endedEarly = false,
-            interruptionCount = 1,
-            suspendCount = 2,
-            tone = "本次专注较稳定",
+    private val currentSession = MutableStateFlow<FocusSession?>(null)
+    private val recentSummaries = MutableStateFlow(
+        listOf(
+            FocusSessionSummary(
+                title = "高数刷题",
+                plannedMinutes = 40,
+                actualMinutes = 38,
+                endedEarly = false,
+                interruptionCount = 1,
+                suspendCount = 2,
+                tone = "本次专注较稳定",
+            ),
+        ),
+    )
+    private val suspendedAnchors = MutableStateFlow(
+        listOf(
+            SuspendAnchor(
+                id = "sample-message",
+                type = SuspendItemType.Message,
+                keyword = "导师",
+                createdAtEpochMillis = 0L,
+                sessionStartedAtEpochMillis = 0L,
+            ),
+            SuspendAnchor(
+                id = "sample-research",
+                type = SuspendItemType.Research,
+                keyword = "六级报名",
+                createdAtEpochMillis = 1L,
+                sessionStartedAtEpochMillis = 0L,
+            ),
         ),
     )
 
-    override fun currentSession(): FocusSession? = currentSession
+    override val currentSessionFlow: StateFlow<FocusSession?> = currentSession.asStateFlow()
+    override val recentSummariesFlow: StateFlow<List<FocusSessionSummary>> = recentSummaries.asStateFlow()
+    override val suspendedAnchorsFlow: StateFlow<List<SuspendAnchor>> = suspendedAnchors.asStateFlow()
 
     override fun startSession(session: FocusSession) {
-        currentSession = session
+        currentSession.value = session
     }
 
     override fun pauseCurrentSession(pausedAtEpochMillis: Long) {
-        val session = currentSession ?: return
+        val session = currentSession.value ?: return
         if (session.status != FocusSessionStatus.Running) return
 
-        currentSession = session.copy(
+        currentSession.value = session.copy(
             status = FocusSessionStatus.Paused,
             pausedAtEpochMillis = pausedAtEpochMillis,
             interruptionCount = session.interruptionCount + 1,
@@ -38,11 +64,11 @@ class InMemoryFocusRepository : FocusRepository {
     }
 
     override fun resumeCurrentSession(resumedAtEpochMillis: Long) {
-        val session = currentSession ?: return
+        val session = currentSession.value ?: return
         val pausedAtEpochMillis = session.pausedAtEpochMillis ?: return
         if (session.status != FocusSessionStatus.Paused) return
 
-        currentSession = session.copy(
+        currentSession.value = session.copy(
             status = FocusSessionStatus.Running,
             pausedAtEpochMillis = null,
             accumulatedPausedMillis = session.accumulatedPausedMillis +
@@ -54,32 +80,44 @@ class InMemoryFocusRepository : FocusRepository {
         finishedAtEpochMillis: Long,
         endedEarly: Boolean,
     ): FocusSessionSummary? {
-        val session = currentSession ?: return null
+        val session = currentSession.value ?: return null
+        val suspendCount = suspendedAnchors.value.count {
+            it.sessionStartedAtEpochMillis == session.startedAtEpochMillis
+        }
         val summary = FocusSessionSummary(
             title = session.title,
             plannedMinutes = session.durationMinutes,
             actualMinutes = calculateActualMinutes(session, finishedAtEpochMillis),
             endedEarly = endedEarly,
             interruptionCount = session.interruptionCount,
-            suspendCount = 0,
+            suspendCount = suspendCount,
             tone = summaryTone(
                 endedEarly = endedEarly,
                 interruptionCount = session.interruptionCount,
             ),
         )
 
-        recentSummaries.add(0, summary)
-        currentSession = null
+        recentSummaries.value = listOf(summary) + recentSummaries.value
+        currentSession.value = null
         return summary
     }
 
-    override fun recentSummaries(): List<FocusSessionSummary> = recentSummaries.toList()
-
-    override fun suspendedAnchors(): List<SuspendAnchor> =
-        listOf(
-            SuspendAnchor(type = SuspendItemType.Message, keyword = "导师"),
-            SuspendAnchor(type = SuspendItemType.Research, keyword = "六级报名"),
+    override fun addSuspendAnchor(
+        type: SuspendItemType,
+        keyword: String?,
+        createdAtEpochMillis: Long,
+    ): SuspendAnchor? {
+        val session = currentSession.value ?: return null
+        val anchor = SuspendAnchor(
+            id = UUID.randomUUID().toString(),
+            type = type,
+            keyword = keyword?.takeIf { it.isNotBlank() },
+            createdAtEpochMillis = createdAtEpochMillis,
+            sessionStartedAtEpochMillis = session.startedAtEpochMillis,
         )
+        suspendedAnchors.value = listOf(anchor) + suspendedAnchors.value
+        return anchor
+    }
 
     private fun calculateActualMinutes(
         session: FocusSession,

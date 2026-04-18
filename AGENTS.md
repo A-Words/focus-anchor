@@ -9,9 +9,9 @@
 
 ## 2. 当前模块事实
 
-- `app`：应用壳层，只负责 `Application`、`MainActivity`、顶层导航、全局装配。
+- `app`：应用壳层，负责 `Application`、`MainActivity`、顶层导航、前台服务、通知样式与系统级快速挂起入口装配。
 - `core:model`：稳定领域模型，当前包含 `FocusSession`、`FocusSessionSummary`、`SuspendAnchor`、`FocusMode`、`SuspendItemType`。
-- `core:data`：数据边界层，当前放仓库接口和占位数据实现。
+- `core:data`：数据边界层，当前放仓库接口、可观察会话状态和占位数据实现。
 - `core:designsystem`：共享 UI 基础层，当前放 Theme、颜色、排版、通用 Compose 组件。
 - `feature:focus`：专注主流程，承接会话创建、倒计时、轻监督、快速挂起入口。
 - `feature:inbox`：稍后处理箱，承接挂起事项查看与后续处理。
@@ -27,6 +27,7 @@
 - `app` 只保留壳层和装配职责，不承载具体 feature 业务实现。
 - 新功能优先沿用现有模块边界；只有在现有模块明显无法承载时，才新增模块。
 - 当前项目仍处于骨架期，不要过早引入复杂分层、额外框架或大规模基础设施改造。
+- 专注中的系统级通知、前台服务和外部入口装配仍归 `app`，不要把这些 Android 壳层接线下沉进 feature。
 
 ## 4. UI 与实现约束
 

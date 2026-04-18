@@ -12,15 +12,16 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.focusanchor.app.FocusAnchorApplication
-import com.focusanchor.core.model.FocusSessionSummary
+import com.focusanchor.app.session.FocusSessionForegroundService
 import com.focusanchor.feature.focus.FocusScreen
 import com.focusanchor.feature.history.HistoryScreen
 import com.focusanchor.feature.inbox.InboxScreen
@@ -35,14 +36,26 @@ private enum class TopLevelDestination(val label: String) {
 
 @Composable
 fun FocusAnchorApp() {
-    val application = LocalContext.current.applicationContext as FocusAnchorApplication
+    val appContext = LocalContext.current.applicationContext
+    val application = appContext as FocusAnchorApplication
     val focusRepository = application.focusRepository
     var destination by rememberSaveable { mutableStateOf(TopLevelDestination.Focus) }
-    var currentSession by remember(focusRepository) {
-        mutableStateOf(focusRepository.currentSession())
-    }
-    var latestSummary by remember(focusRepository) {
-        mutableStateOf<FocusSessionSummary?>(null)
+    var hadActiveSession by rememberSaveable { mutableStateOf(false) }
+    val currentSession by focusRepository.currentSessionFlow.collectAsState()
+    val suspendedAnchors by focusRepository.suspendedAnchorsFlow.collectAsState()
+    val recentSummaries by focusRepository.recentSummariesFlow.collectAsState()
+    val latestSummary = recentSummaries.firstOrNull()
+    val currentSuspendCount = currentSession?.let { session ->
+        suspendedAnchors.count { it.sessionStartedAtEpochMillis == session.startedAtEpochMillis }
+    } ?: 0
+
+    LaunchedEffect(currentSession?.startedAtEpochMillis) {
+        if (currentSession != null) {
+            hadActiveSession = true
+        } else if (hadActiveSession && latestSummary != null) {
+            destination = TopLevelDestination.Summary
+            hadActiveSession = false
+        }
     }
 
     Scaffold(
@@ -72,30 +85,41 @@ fun FocusAnchorApp() {
         when (destination) {
             TopLevelDestination.Focus -> FocusScreen(
                 currentSession = currentSession,
+                currentSuspendCount = currentSuspendCount,
                 onStartSession = { session ->
                     focusRepository.startSession(session)
-                    currentSession = focusRepository.currentSession()
+                    FocusSessionForegroundService.start(appContext)
                 },
                 onPauseSession = {
                     focusRepository.pauseCurrentSession(System.currentTimeMillis())
-                    currentSession = focusRepository.currentSession()
                 },
                 onResumeSession = {
                     focusRepository.resumeCurrentSession(System.currentTimeMillis())
-                    currentSession = focusRepository.currentSession()
+                },
+                onAddSuspendAnchor = { type, keyword ->
+                    focusRepository.addSuspendAnchor(
+                        type = type,
+                        keyword = keyword,
+                        createdAtEpochMillis = System.currentTimeMillis(),
+                    )
                 },
                 onFinishSession = { endedEarly ->
-                    latestSummary = focusRepository.finishCurrentSession(
+                    focusRepository.finishCurrentSession(
                         finishedAtEpochMillis = System.currentTimeMillis(),
                         endedEarly = endedEarly,
                     )
-                    currentSession = focusRepository.currentSession()
-                    destination = TopLevelDestination.Summary
+                    FocusSessionForegroundService.stop(appContext)
                 },
                 modifier = Modifier.padding(innerPadding),
             )
-            TopLevelDestination.Inbox -> InboxScreen(modifier = Modifier.padding(innerPadding))
-            TopLevelDestination.History -> HistoryScreen(modifier = Modifier.padding(innerPadding))
+            TopLevelDestination.Inbox -> InboxScreen(
+                anchors = suspendedAnchors,
+                modifier = Modifier.padding(innerPadding),
+            )
+            TopLevelDestination.History -> HistoryScreen(
+                summaries = recentSummaries,
+                modifier = Modifier.padding(innerPadding),
+            )
             TopLevelDestination.Summary -> SummaryScreen(
                 summary = latestSummary,
                 modifier = Modifier.padding(innerPadding),

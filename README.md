@@ -67,13 +67,15 @@ Windows 下使用 `gradlew.bat`。
 
 - 多模块骨架（app / core / feature）拆分
 - `core:model` 基础领域模型
-- `feature:focus` 专注会话创建页 + 倒计时
-- 内存态当前会话管理
+- `core:data` 可观察的内存态会话 / 挂起 / 总结状态源
+- `feature:focus` 专注会话创建页 + 倒计时 + 快速挂起表单
+- 前台服务通知，支持 `暂停 / 继续`、`结束`、`挂起一下`
+- Android 16 `ProgressStyle` / promoted ongoing 与低版本标准通知回退
 
 下一步演进顺序：
-1. 把“快速挂起”接入 `feature:inbox`，跑通最小闭环
-2. 补 `feature:summary` 专注结束反馈页
-3. 做 `feature:history` 列表与 `core:data` 持久化
+1. 把挂起事项补充为可处理状态，接正式待办/忽略动作
+2. 补更完整的专注总结承接和继续下一轮入口
+3. 做 `core:data` 持久化与 Android 17 `MetricStyle` 增强
 
 ---
 

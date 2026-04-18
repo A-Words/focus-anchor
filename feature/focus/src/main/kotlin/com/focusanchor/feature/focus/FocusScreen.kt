@@ -16,7 +16,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +29,7 @@ import com.focusanchor.core.designsystem.component.FocusAnchorSectionCard
 import com.focusanchor.core.model.FocusMode
 import com.focusanchor.core.model.FocusSession
 import com.focusanchor.core.model.FocusSessionStatus
+import com.focusanchor.core.model.SuspendItemType
 import kotlinx.coroutines.delay
 
 private val durationOptions = listOf(15, 25, 40, 60)
@@ -37,9 +37,11 @@ private val durationOptions = listOf(15, 25, 40, 60)
 @Composable
 fun FocusScreen(
     currentSession: FocusSession?,
+    currentSuspendCount: Int,
     onStartSession: (FocusSession) -> Unit,
     onPauseSession: () -> Unit,
     onResumeSession: () -> Unit,
+    onAddSuspendAnchor: (SuspendItemType, String?) -> Unit,
     onFinishSession: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -51,8 +53,10 @@ fun FocusScreen(
     } else {
         ActiveFocusScreen(
             session = currentSession,
+            currentSuspendCount = currentSuspendCount,
             onPauseSession = onPauseSession,
             onResumeSession = onResumeSession,
+            onAddSuspendAnchor = onAddSuspendAnchor,
             onFinishSession = onFinishSession,
             modifier = modifier,
         )
@@ -163,12 +167,15 @@ private fun FocusCreationScreen(
 @Composable
 private fun ActiveFocusScreen(
     session: FocusSession,
+    currentSuspendCount: Int,
     onPauseSession: () -> Unit,
     onResumeSession: () -> Unit,
+    onAddSuspendAnchor: (SuspendItemType, String?) -> Unit,
     onFinishSession: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showFinishDialog by rememberSaveable(session.startedAtEpochMillis) { mutableStateOf(false) }
+    var showQuickSuspendDialog by rememberSaveable(session.startedAtEpochMillis) { mutableStateOf(false) }
     val nowMillis = produceState(
         initialValue = System.currentTimeMillis(),
         session.startedAtEpochMillis,
@@ -185,11 +192,7 @@ private fun ActiveFocusScreen(
             }
             if (
                 calculateFocusCountdownState(
-                    startedAtEpochMillis = session.startedAtEpochMillis,
-                    durationMinutes = session.durationMinutes,
-                    accumulatedPausedMillis = session.accumulatedPausedMillis,
-                    pausedAtEpochMillis = session.pausedAtEpochMillis,
-                    status = session.status,
+                    session = session,
                     nowMillis = currentTime,
                 ).isCompleted
             ) {
@@ -198,19 +201,9 @@ private fun ActiveFocusScreen(
             delay(1000L)
         }
     }.value
-    val countdownState = calculateFocusCountdownState(
-        startedAtEpochMillis = session.startedAtEpochMillis,
-        durationMinutes = session.durationMinutes,
-        accumulatedPausedMillis = session.accumulatedPausedMillis,
-        pausedAtEpochMillis = session.pausedAtEpochMillis,
-        status = session.status,
-        nowMillis = nowMillis,
-    )
+    val countdownState = calculateFocusCountdownState(session = session, nowMillis = nowMillis)
 
     if (session.status == FocusSessionStatus.Running && countdownState.isCompleted) {
-        LaunchedEffect(session.startedAtEpochMillis) {
-            onFinishSession(false)
-        }
         AutoFinishingScreen(modifier = modifier)
         return
     }
@@ -238,18 +231,32 @@ private fun ActiveFocusScreen(
         )
     }
 
+    if (showQuickSuspendDialog) {
+        FocusQuickSuspendDialog(
+            onDismiss = { showQuickSuspendDialog = false },
+            onSubmit = { type, keyword ->
+                onAddSuspendAnchor(type, keyword)
+                showQuickSuspendDialog = false
+            },
+        )
+    }
+
     when (session.status) {
         FocusSessionStatus.Running -> RunningFocusScreen(
             session = session,
             countdownState = countdownState,
+            currentSuspendCount = currentSuspendCount,
             onPauseSession = onPauseSession,
+            onRequestSuspend = { showQuickSuspendDialog = true },
             onRequestFinish = { showFinishDialog = true },
             modifier = modifier,
         )
         FocusSessionStatus.Paused -> PausedFocusScreen(
             session = session,
             countdownState = countdownState,
+            currentSuspendCount = currentSuspendCount,
             onResumeSession = onResumeSession,
+            onRequestSuspend = { showQuickSuspendDialog = true },
             onRequestFinish = { showFinishDialog = true },
             modifier = modifier,
         )
@@ -260,19 +267,24 @@ private fun ActiveFocusScreen(
 private fun RunningFocusScreen(
     session: FocusSession,
     countdownState: FocusCountdownState,
+    currentSuspendCount: Int,
     onPauseSession: () -> Unit,
+    onRequestSuspend: () -> Unit,
     onRequestFinish: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ActiveSessionLayout(
         session = session,
         countdownState = countdownState,
+        currentSuspendCount = currentSuspendCount,
         statusTitle = "专注中",
         statusBody = "这轮专注正在进行。切到底部其他入口后再回来，倒计时会按真实时间继续流逝。",
         actions = {
             SessionActions(
                 primaryLabel = "暂停",
                 onPrimaryClick = onPauseSession,
+                suspendLabel = "挂起一下",
+                onSuspendClick = onRequestSuspend,
                 secondaryLabel = "结束",
                 onSecondaryClick = onRequestFinish,
             )
@@ -285,19 +297,24 @@ private fun RunningFocusScreen(
 private fun PausedFocusScreen(
     session: FocusSession,
     countdownState: FocusCountdownState,
+    currentSuspendCount: Int,
     onResumeSession: () -> Unit,
+    onRequestSuspend: () -> Unit,
     onRequestFinish: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ActiveSessionLayout(
         session = session,
         countdownState = countdownState,
+        currentSuspendCount = currentSuspendCount,
         statusTitle = "已暂停",
         statusBody = "这轮专注已经暂停，倒计时会保持冻结，只有点继续才会恢复。",
         actions = {
             SessionActions(
                 primaryLabel = "继续",
                 onPrimaryClick = onResumeSession,
+                suspendLabel = "挂起一下",
+                onSuspendClick = onRequestSuspend,
                 secondaryLabel = "结束",
                 onSecondaryClick = onRequestFinish,
             )
@@ -332,6 +349,7 @@ private fun AutoFinishingScreen(modifier: Modifier = Modifier) {
 private fun ActiveSessionLayout(
     session: FocusSession,
     countdownState: FocusCountdownState,
+    currentSuspendCount: Int,
     statusTitle: String,
     statusBody: String,
     actions: @Composable () -> Unit,
@@ -357,7 +375,7 @@ private fun ActiveSessionLayout(
         item {
             FocusAnchorSectionCard(
                 title = "剩余时间",
-                body = "先把注意力留在当前任务，想到别的事时后续再补挂起入口。",
+                body = "想到别的事时先挂起，不要离开当前专注。当前已挂起 $currentSuspendCount 条。",
             ) {
                 Text(
                     text = formatCountdown(countdownState.remainingSeconds),
@@ -395,6 +413,8 @@ private fun ActiveSessionLayout(
 private fun SessionActions(
     primaryLabel: String,
     onPrimaryClick: () -> Unit,
+    suspendLabel: String,
+    onSuspendClick: () -> Unit,
     secondaryLabel: String,
     onSecondaryClick: () -> Unit,
 ) {
@@ -407,6 +427,12 @@ private fun SessionActions(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(primaryLabel)
+        }
+        OutlinedButton(
+            onClick = onSuspendClick,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(suspendLabel)
         }
         OutlinedButton(
             onClick = onSecondaryClick,
