@@ -25,6 +25,7 @@ class FocusSessionForegroundService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var tickerJob: Job? = null
     private var hasStartedForeground = false
+    private var lastDiagnostics: FocusSessionNotificationDiagnostics? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -85,7 +86,7 @@ class FocusSessionForegroundService : Service() {
                 val suspendCount = focusRepository.suspendedAnchorsFlow.value.count {
                     it.sessionStartedAtEpochMillis == session.startedAtEpochMillis
                 }
-                val notification = FocusSessionNotificationFactory.create(
+                val buildResult = FocusSessionNotificationFactory.build(
                     context = this@FocusSessionForegroundService,
                     model = FocusSessionNotificationModel(
                         session = session,
@@ -93,13 +94,18 @@ class FocusSessionForegroundService : Service() {
                         suspendCount = suspendCount,
                     ),
                 )
+                FocusSessionNotifications.logDiagnosticsIfChanged(
+                    lastDiagnostics = lastDiagnostics,
+                    nextDiagnostics = buildResult.diagnostics,
+                )
+                lastDiagnostics = buildResult.diagnostics
 
                 if (!hasStartedForeground) {
-                    startForegroundCompat(notification)
+                    startForegroundCompat(buildResult.notification)
                     hasStartedForeground = true
                 } else {
                     val manager = getSystemService(android.app.NotificationManager::class.java)
-                    manager.notify(FocusSessionNotifications.notificationId, notification)
+                    manager.notify(FocusSessionNotifications.notificationId, buildResult.notification)
                 }
                 delay(1_000L)
             }
@@ -123,6 +129,7 @@ class FocusSessionForegroundService : Service() {
             stopForeground(STOP_FOREGROUND_REMOVE)
             hasStartedForeground = false
         }
+        lastDiagnostics = null
         stopSelf()
     }
 

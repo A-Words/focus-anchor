@@ -38,10 +38,12 @@ private val durationOptions = listOf(15, 25, 40, 60)
 fun FocusScreen(
     currentSession: FocusSession?,
     currentSuspendCount: Int,
+    debugPanels: List<FocusDebugPanel> = emptyList(),
     onStartSession: (FocusSession) -> Unit,
     onPauseSession: () -> Unit,
     onResumeSession: () -> Unit,
     onAddSuspendAnchor: (SuspendItemType, String?) -> Unit,
+    onDebugAction: (FocusDebugAction) -> Unit = {},
     onFinishSession: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -54,9 +56,11 @@ fun FocusScreen(
         ActiveFocusScreen(
             session = currentSession,
             currentSuspendCount = currentSuspendCount,
+            debugPanels = debugPanels,
             onPauseSession = onPauseSession,
             onResumeSession = onResumeSession,
             onAddSuspendAnchor = onAddSuspendAnchor,
+            onDebugAction = onDebugAction,
             onFinishSession = onFinishSession,
             modifier = modifier,
         )
@@ -168,9 +172,11 @@ private fun FocusCreationScreen(
 private fun ActiveFocusScreen(
     session: FocusSession,
     currentSuspendCount: Int,
+    debugPanels: List<FocusDebugPanel>,
     onPauseSession: () -> Unit,
     onResumeSession: () -> Unit,
     onAddSuspendAnchor: (SuspendItemType, String?) -> Unit,
+    onDebugAction: (FocusDebugAction) -> Unit,
     onFinishSession: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -246,18 +252,22 @@ private fun ActiveFocusScreen(
             session = session,
             countdownState = countdownState,
             currentSuspendCount = currentSuspendCount,
+            debugPanels = debugPanels,
             onPauseSession = onPauseSession,
             onRequestSuspend = { showQuickSuspendDialog = true },
             onRequestFinish = { showFinishDialog = true },
+            onDebugAction = onDebugAction,
             modifier = modifier,
         )
         FocusSessionStatus.Paused -> PausedFocusScreen(
             session = session,
             countdownState = countdownState,
             currentSuspendCount = currentSuspendCount,
+            debugPanels = debugPanels,
             onResumeSession = onResumeSession,
             onRequestSuspend = { showQuickSuspendDialog = true },
             onRequestFinish = { showFinishDialog = true },
+            onDebugAction = onDebugAction,
             modifier = modifier,
         )
     }
@@ -268,15 +278,18 @@ private fun RunningFocusScreen(
     session: FocusSession,
     countdownState: FocusCountdownState,
     currentSuspendCount: Int,
+    debugPanels: List<FocusDebugPanel>,
     onPauseSession: () -> Unit,
     onRequestSuspend: () -> Unit,
     onRequestFinish: () -> Unit,
+    onDebugAction: (FocusDebugAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ActiveSessionLayout(
         session = session,
         countdownState = countdownState,
         currentSuspendCount = currentSuspendCount,
+        debugPanels = debugPanels,
         statusTitle = "专注中",
         statusBody = "这轮专注正在进行。切到底部其他入口后再回来，倒计时会按真实时间继续流逝。",
         actions = {
@@ -289,6 +302,7 @@ private fun RunningFocusScreen(
                 onSecondaryClick = onRequestFinish,
             )
         },
+        onDebugAction = onDebugAction,
         modifier = modifier,
     )
 }
@@ -298,15 +312,18 @@ private fun PausedFocusScreen(
     session: FocusSession,
     countdownState: FocusCountdownState,
     currentSuspendCount: Int,
+    debugPanels: List<FocusDebugPanel>,
     onResumeSession: () -> Unit,
     onRequestSuspend: () -> Unit,
     onRequestFinish: () -> Unit,
+    onDebugAction: (FocusDebugAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ActiveSessionLayout(
         session = session,
         countdownState = countdownState,
         currentSuspendCount = currentSuspendCount,
+        debugPanels = debugPanels,
         statusTitle = "已暂停",
         statusBody = "这轮专注已经暂停，倒计时会保持冻结，只有点继续才会恢复。",
         actions = {
@@ -319,6 +336,7 @@ private fun PausedFocusScreen(
                 onSecondaryClick = onRequestFinish,
             )
         },
+        onDebugAction = onDebugAction,
         modifier = modifier,
     )
 }
@@ -350,9 +368,11 @@ private fun ActiveSessionLayout(
     session: FocusSession,
     countdownState: FocusCountdownState,
     currentSuspendCount: Int,
+    debugPanels: List<FocusDebugPanel>,
     statusTitle: String,
     statusBody: String,
     actions: @Composable () -> Unit,
+    onDebugAction: (FocusDebugAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -405,6 +425,23 @@ private fun ActiveSessionLayout(
         }
         item {
             actions()
+        }
+        debugPanels.forEach { panel ->
+            item {
+                FocusAnchorSectionCard(
+                    title = panel.title,
+                    body = panel.body,
+                ) {
+                    panel.action?.let { action ->
+                        OutlinedButton(
+                            onClick = { onDebugAction(action) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(action.label)
+                        }
+                    }
+                }
+            }
         }
     }
 }

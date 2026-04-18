@@ -1,5 +1,6 @@
 package com.focusanchor.app.navigation
 
+import android.content.pm.ApplicationInfo
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.History
@@ -22,10 +23,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.focusanchor.app.FocusAnchorApplication
 import com.focusanchor.app.session.FocusSessionForegroundService
+import com.focusanchor.app.session.FocusSessionNotificationFactory
+import com.focusanchor.app.session.FocusSessionNotificationModel
+import com.focusanchor.app.session.FocusSessionNotifications
+import com.focusanchor.feature.focus.FocusDebugAction
 import com.focusanchor.feature.focus.FocusScreen
 import com.focusanchor.feature.history.HistoryScreen
 import com.focusanchor.feature.inbox.InboxScreen
 import com.focusanchor.feature.summary.SummaryScreen
+import com.focusanchor.core.model.clockState
 
 private enum class TopLevelDestination(val label: String) {
     Focus(label = "专注"),
@@ -38,6 +44,7 @@ private enum class TopLevelDestination(val label: String) {
 fun FocusAnchorApp() {
     val appContext = LocalContext.current.applicationContext
     val application = appContext as FocusAnchorApplication
+    val isDebuggable = (application.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     val focusRepository = application.focusRepository
     var destination by rememberSaveable { mutableStateOf(TopLevelDestination.Focus) }
     var hadActiveSession by rememberSaveable { mutableStateOf(false) }
@@ -48,6 +55,19 @@ fun FocusAnchorApp() {
     val currentSuspendCount = currentSession?.let { session ->
         suspendedAnchors.count { it.sessionStartedAtEpochMillis == session.startedAtEpochMillis }
     } ?: 0
+    val debugPanels = currentSession?.let { session ->
+        FocusSessionNotifications.buildDebugPanels(
+            diagnostics = FocusSessionNotificationFactory.diagnostics(
+                context = appContext,
+                model = FocusSessionNotificationModel(
+                    session = session,
+                    remainingSeconds = session.clockState(System.currentTimeMillis()).remainingSeconds,
+                    suspendCount = currentSuspendCount,
+                ),
+            ),
+            isDebugBuild = isDebuggable,
+        )
+    } ?: emptyList()
 
     LaunchedEffect(currentSession?.startedAtEpochMillis) {
         if (currentSession != null) {
@@ -86,6 +106,7 @@ fun FocusAnchorApp() {
             TopLevelDestination.Focus -> FocusScreen(
                 currentSession = currentSession,
                 currentSuspendCount = currentSuspendCount,
+                debugPanels = debugPanels,
                 onStartSession = { session ->
                     focusRepository.startSession(session)
                     FocusSessionForegroundService.start(appContext)
@@ -102,6 +123,14 @@ fun FocusAnchorApp() {
                         keyword = keyword,
                         createdAtEpochMillis = System.currentTimeMillis(),
                     )
+                },
+                onDebugAction = { action ->
+                    when (action) {
+                        FocusDebugAction.OpenNotificationSettings ->
+                            FocusSessionNotifications.openAppNotificationSettings(appContext)
+                        FocusDebugAction.OpenPromotionSettings ->
+                            FocusSessionNotifications.openPromotionSettings(appContext)
+                    }
                 },
                 onFinishSession = { endedEarly ->
                     focusRepository.finishCurrentSession(
