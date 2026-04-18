@@ -18,13 +18,19 @@ private val sampleSummary = FocusSessionSummary(
     title = "背单词",
     plannedMinutes = 25,
     actualMinutes = 25,
+    endedEarly = false,
     interruptionCount = 1,
     suspendCount = 3,
     tone = "本次专注较稳定",
 )
 
 @Composable
-fun SummaryScreen(modifier: Modifier = Modifier) {
+fun SummaryScreen(
+    summary: FocusSessionSummary? = null,
+    modifier: Modifier = Modifier,
+) {
+    val displaySummary = summary ?: sampleSummary
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
@@ -44,18 +50,22 @@ fun SummaryScreen(modifier: Modifier = Modifier) {
         }
         items(
             listOf(
-                "任务名称：${sampleSummary.title}",
-                "设定 / 实际：${sampleSummary.plannedMinutes} / ${sampleSummary.actualMinutes} 分钟",
-                "中断次数：${sampleSummary.interruptionCount}",
-                "挂起事项：${sampleSummary.suspendCount}",
-                "状态评价：${sampleSummary.tone}",
+                "任务名称：${displaySummary.title}",
+                "设定 / 实际：${displaySummary.plannedMinutes} / ${displaySummary.actualMinutes} 分钟",
+                "是否中途退出：${if (displaySummary.endedEarly) "是" else "否"}",
+                "中断次数：${displaySummary.interruptionCount}",
+                "挂起事项：${displaySummary.suspendCount}",
+                "状态评价：${displaySummary.tone}",
             ),
         ) { line ->
             FocusAnchorSectionCard(
                 title = line,
-                body = "后续这里可扩展操作建议、继续下一轮、转入稍后处理箱。",
+                body = if (summary == null) {
+                    "当前显示占位总结，真实会话结束后会优先展示本轮结果。"
+                } else {
+                    "当前展示本轮真实结果，后续这里可扩展继续下一轮和稍后处理承接。"
+                },
             )
         }
     }
 }
-

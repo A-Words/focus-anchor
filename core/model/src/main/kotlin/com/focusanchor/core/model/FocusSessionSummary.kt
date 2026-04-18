@@ -4,8 +4,8 @@ data class FocusSessionSummary(
     val title: String,
     val plannedMinutes: Int,
     val actualMinutes: Int,
+    val endedEarly: Boolean,
     val interruptionCount: Int,
     val suspendCount: Int,
     val tone: String,
 )
-

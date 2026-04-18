@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.focusanchor.app.FocusAnchorApplication
+import com.focusanchor.core.model.FocusSessionSummary
 import com.focusanchor.feature.focus.FocusScreen
 import com.focusanchor.feature.history.HistoryScreen
 import com.focusanchor.feature.inbox.InboxScreen
@@ -39,6 +40,9 @@ fun FocusAnchorApp() {
     var destination by rememberSaveable { mutableStateOf(TopLevelDestination.Focus) }
     var currentSession by remember(focusRepository) {
         mutableStateOf(focusRepository.currentSession())
+    }
+    var latestSummary by remember(focusRepository) {
+        mutableStateOf<FocusSessionSummary?>(null)
     }
 
     Scaffold(
@@ -72,14 +76,30 @@ fun FocusAnchorApp() {
                     focusRepository.startSession(session)
                     currentSession = focusRepository.currentSession()
                 },
-                onOpenSummary = {
+                onPauseSession = {
+                    focusRepository.pauseCurrentSession(System.currentTimeMillis())
+                    currentSession = focusRepository.currentSession()
+                },
+                onResumeSession = {
+                    focusRepository.resumeCurrentSession(System.currentTimeMillis())
+                    currentSession = focusRepository.currentSession()
+                },
+                onFinishSession = { endedEarly ->
+                    latestSummary = focusRepository.finishCurrentSession(
+                        finishedAtEpochMillis = System.currentTimeMillis(),
+                        endedEarly = endedEarly,
+                    )
+                    currentSession = focusRepository.currentSession()
                     destination = TopLevelDestination.Summary
                 },
                 modifier = Modifier.padding(innerPadding),
             )
             TopLevelDestination.Inbox -> InboxScreen(modifier = Modifier.padding(innerPadding))
             TopLevelDestination.History -> HistoryScreen(modifier = Modifier.padding(innerPadding))
-            TopLevelDestination.Summary -> SummaryScreen(modifier = Modifier.padding(innerPadding))
+            TopLevelDestination.Summary -> SummaryScreen(
+                summary = latestSummary,
+                modifier = Modifier.padding(innerPadding),
+            )
         }
     }
 }

@@ -3,16 +3,20 @@ package com.focusanchor.feature.focus
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.focusanchor.core.designsystem.component.FocusAnchorSectionCard
 import com.focusanchor.core.model.FocusMode
 import com.focusanchor.core.model.FocusSession
+import com.focusanchor.core.model.FocusSessionStatus
 import kotlinx.coroutines.delay
 
 private val durationOptions = listOf(15, 25, 40, 60)
@@ -33,7 +38,9 @@ private val durationOptions = listOf(15, 25, 40, 60)
 fun FocusScreen(
     currentSession: FocusSession?,
     onStartSession: (FocusSession) -> Unit,
-    onOpenSummary: () -> Unit,
+    onPauseSession: () -> Unit,
+    onResumeSession: () -> Unit,
+    onFinishSession: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (currentSession == null) {
@@ -44,7 +51,9 @@ fun FocusScreen(
     } else {
         ActiveFocusScreen(
             session = currentSession,
-            onOpenSummary = onOpenSummary,
+            onPauseSession = onPauseSession,
+            onResumeSession = onResumeSession,
+            onFinishSession = onFinishSession,
             modifier = modifier,
         )
     }
@@ -154,21 +163,33 @@ private fun FocusCreationScreen(
 @Composable
 private fun ActiveFocusScreen(
     session: FocusSession,
-    onOpenSummary: () -> Unit,
+    onPauseSession: () -> Unit,
+    onResumeSession: () -> Unit,
+    onFinishSession: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showFinishDialog by rememberSaveable(session.startedAtEpochMillis) { mutableStateOf(false) }
     val nowMillis = produceState(
         initialValue = System.currentTimeMillis(),
-        key1 = session.startedAtEpochMillis,
-        key2 = session.durationMinutes,
+        session.startedAtEpochMillis,
+        session.durationMinutes,
+        session.accumulatedPausedMillis,
+        session.pausedAtEpochMillis,
+        session.status,
     ) {
         while (true) {
             val currentTime = System.currentTimeMillis()
             value = currentTime
+            if (session.status == FocusSessionStatus.Paused) {
+                break
+            }
             if (
                 calculateFocusCountdownState(
                     startedAtEpochMillis = session.startedAtEpochMillis,
                     durationMinutes = session.durationMinutes,
+                    accumulatedPausedMillis = session.accumulatedPausedMillis,
+                    pausedAtEpochMillis = session.pausedAtEpochMillis,
+                    status = session.status,
                     nowMillis = currentTime,
                 ).isCompleted
             ) {
@@ -180,19 +201,56 @@ private fun ActiveFocusScreen(
     val countdownState = calculateFocusCountdownState(
         startedAtEpochMillis = session.startedAtEpochMillis,
         durationMinutes = session.durationMinutes,
+        accumulatedPausedMillis = session.accumulatedPausedMillis,
+        pausedAtEpochMillis = session.pausedAtEpochMillis,
+        status = session.status,
         nowMillis = nowMillis,
     )
 
-    if (countdownState.isCompleted) {
-        CompletedFocusScreen(
-            session = session,
-            onOpenSummary = onOpenSummary,
-            modifier = modifier,
+    if (session.status == FocusSessionStatus.Running && countdownState.isCompleted) {
+        LaunchedEffect(session.startedAtEpochMillis) {
+            onFinishSession(false)
+        }
+        AutoFinishingScreen(modifier = modifier)
+        return
+    }
+
+    if (showFinishDialog) {
+        AlertDialog(
+            onDismissRequest = { showFinishDialog = false },
+            title = { Text("结束专注") },
+            text = { Text("结束后会生成本次总结并离开当前会话") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showFinishDialog = false
+                        onFinishSession(true)
+                    },
+                ) {
+                    Text("确认结束")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFinishDialog = false }) {
+                    Text("继续专注")
+                }
+            },
         )
-    } else {
-        RunningFocusScreen(
+    }
+
+    when (session.status) {
+        FocusSessionStatus.Running -> RunningFocusScreen(
             session = session,
             countdownState = countdownState,
+            onPauseSession = onPauseSession,
+            onRequestFinish = { showFinishDialog = true },
+            modifier = modifier,
+        )
+        FocusSessionStatus.Paused -> PausedFocusScreen(
+            session = session,
+            countdownState = countdownState,
+            onResumeSession = onResumeSession,
+            onRequestFinish = { showFinishDialog = true },
             modifier = modifier,
         )
     }
@@ -202,6 +260,81 @@ private fun ActiveFocusScreen(
 private fun RunningFocusScreen(
     session: FocusSession,
     countdownState: FocusCountdownState,
+    onPauseSession: () -> Unit,
+    onRequestFinish: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ActiveSessionLayout(
+        session = session,
+        countdownState = countdownState,
+        statusTitle = "专注中",
+        statusBody = "这轮专注正在进行。切到底部其他入口后再回来，倒计时会按真实时间继续流逝。",
+        actions = {
+            SessionActions(
+                primaryLabel = "暂停",
+                onPrimaryClick = onPauseSession,
+                secondaryLabel = "结束",
+                onSecondaryClick = onRequestFinish,
+            )
+        },
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun PausedFocusScreen(
+    session: FocusSession,
+    countdownState: FocusCountdownState,
+    onResumeSession: () -> Unit,
+    onRequestFinish: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ActiveSessionLayout(
+        session = session,
+        countdownState = countdownState,
+        statusTitle = "已暂停",
+        statusBody = "这轮专注已经暂停，倒计时会保持冻结，只有点继续才会恢复。",
+        actions = {
+            SessionActions(
+                primaryLabel = "继续",
+                onPrimaryClick = onResumeSession,
+                secondaryLabel = "结束",
+                onSecondaryClick = onRequestFinish,
+            )
+        },
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun AutoFinishingScreen(modifier: Modifier = Modifier) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "正在生成总结",
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                Text(
+                    text = "本轮专注已自然结束，正在为你整理本次结果。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActiveSessionLayout(
+    session: FocusSession,
+    countdownState: FocusCountdownState,
+    statusTitle: String,
+    statusBody: String,
+    actions: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -212,11 +345,11 @@ private fun RunningFocusScreen(
         item {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    text = "专注中",
+                    text = statusTitle,
                     style = MaterialTheme.typography.headlineSmall,
                 )
                 Text(
-                    text = "这轮专注正在进行。切到底部其他入口后再回来，倒计时会按真实时间继续流逝。",
+                    text = statusBody,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -252,59 +385,34 @@ private fun RunningFocusScreen(
                 body = "${session.durationMinutes} 分钟",
             )
         }
+        item {
+            actions()
+        }
     }
 }
 
 @Composable
-private fun CompletedFocusScreen(
-    session: FocusSession,
-    onOpenSummary: () -> Unit,
-    modifier: Modifier = Modifier,
+private fun SessionActions(
+    primaryLabel: String,
+    onPrimaryClick: () -> Unit,
+    secondaryLabel: String,
+    onSecondaryClick: () -> Unit,
 ) {
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "本轮已完成",
-                    style = MaterialTheme.typography.headlineSmall,
-                )
-                Text(
-                    text = "倒计时已经归零。先确认本轮结果，再进入总结页查看后续承接。",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
+        Button(
+            onClick = onPrimaryClick,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(primaryLabel)
         }
-        item {
-            FocusAnchorSectionCard(
-                title = "完成状态",
-                body = "本轮专注已完成，当前先停留在完成态，不自动跳转页面。",
-            ) {
-                Text(
-                    text = "00:00",
-                    modifier = Modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.displayLarge,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
-        item {
-            FocusAnchorSectionCard(
-                title = "本轮摘要",
-                body = "任务：${session.title}\n模式：${session.mode.label}\n设定时长：${session.durationMinutes} 分钟",
-            ) {
-                Button(
-                    onClick = onOpenSummary,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp),
-                ) {
-                    Text("查看总结")
-                }
-            }
+        OutlinedButton(
+            onClick = onSecondaryClick,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(secondaryLabel)
         }
     }
 }
@@ -313,9 +421,7 @@ private fun CompletedFocusScreen(
 private fun ChipGroup(labels: List<ChipOption>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         labels.chunked(2).forEach { row ->
-            androidx.compose.foundation.layout.Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { option ->
                     FilterChip(
                         selected = option.selected,
