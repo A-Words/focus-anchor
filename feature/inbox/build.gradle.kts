@@ -12,6 +12,7 @@ kotlin {
         namespace = "com.focusanchor.feature.inbox"
         compileSdk = 36
         minSdk = 26
+        withHostTestBuilder {}
     }
 
     sourceSets {
@@ -23,10 +24,6 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
-        }
-        androidMain.dependencies {
-            implementation(compose.preview)
-            implementation(compose.uiTooling)
         }
     }
 }

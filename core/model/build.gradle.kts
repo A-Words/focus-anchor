@@ -10,5 +10,6 @@ kotlin {
         namespace = "com.focusanchor.core.model"
         compileSdk = 36
         minSdk = 26
+        withHostTestBuilder {}
     }
 }

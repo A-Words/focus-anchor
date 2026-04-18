@@ -12,6 +12,7 @@ kotlin {
         namespace = "com.focusanchor.core.designsystem"
         compileSdk = 36
         minSdk = 26
+        withHostTestBuilder {}
     }
 
     sourceSets {
@@ -23,7 +24,10 @@ kotlin {
         }
         androidMain.dependencies {
             implementation(compose.preview)
-            implementation(compose.uiTooling)
         }
     }
+}
+
+dependencies {
+    "androidRuntimeClasspath"(compose.uiTooling)
 }
