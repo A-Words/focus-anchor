@@ -22,9 +22,10 @@
 
 ## 技术栈
 
-- Kotlin + Jetpack Compose
-- Android（MVP 第一阶段）
-- Gradle 多模块结构（AGP 9，Kotlin DSL）
+- Kotlin + JetBrains Compose Multiplatform（UI 统一走 `org.jetbrains.compose`）
+- `core/*`、`feature/*` 基于 Kotlin Multiplatform，当前仅启用 `androidTarget()`
+- `app` 作为 Android 应用壳层（AGP 9，Kotlin DSL）
+- Android（MVP 第一阶段；CMP 结构就绪，后续可增补 iOS / Desktop 目标）
 
 ---
 

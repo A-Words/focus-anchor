@@ -2,7 +2,8 @@
 
 ## 1. 项目定位
 
-- 这是一个 Android Kotlin + Jetpack Compose 多模块 MVP 项目。
+- 这是一个 Android Kotlin + JetBrains Compose Multiplatform 多模块 MVP 项目。
+- `core/*` 与 `feature/*` 均基于 Kotlin Multiplatform，当前只启用 `androidTarget()`；`app` 仍是 Android 应用壳层。后续若要扩展 iOS / Desktop 目标，在 KMP 模块补 target 即可，不需要重搭结构。
 - 产品目标不是单纯计时，而是完成“专注会话 -> 快速挂起 -> 稍后处理箱 -> 专注总结 -> 历史记录”的最小闭环。
 - 产品定义以 [docs/product-overview.md](/E:/src/personal/focus-anchor/docs/product-overview.md) 为准。
 - 当前工程结构以 [docs/project-structure.md](/E:/src/personal/focus-anchor/docs/project-structure.md) 为准。

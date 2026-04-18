@@ -3,10 +3,10 @@ package com.focusanchor.feature.focus
 import com.focusanchor.core.model.FocusMode
 import com.focusanchor.core.model.FocusSession
 import com.focusanchor.core.model.FocusSessionStatus
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class FocusCountdownStateTest {
     @Test
